@@ -1,1 +1,332 @@
 
+<!DOCTYPE html>
+<html lang="es-AR">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <meta name="theme-color" content="#0D6B63">
+  <title>Recibo simple</title>
+  <style>
+    :root {
+      --bg: #F3F6F5;
+      --card: #FFFFFF;
+      --text: #1E2E2C;
+      --muted: #6B7F7B;
+      --line: #D5E3E0;
+      --primary: #0D6B63;
+      --primary-soft: #E7F4F2;
+      --neto: #1A4F47;
+      --neto-bg: #D8EFE8;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, "Segoe UI", sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      padding: 16px 14px 32px;
+    }
+    h1 {
+      font-size: 1.15rem;
+      margin: 0 0 4px;
+    }
+    .sub {
+      color: var(--muted);
+      font-size: 0.85rem;
+      margin-bottom: 16px;
+    }
+    .grid {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 14px;
+    }
+    label {
+      display: block;
+      font-size: 0.75rem;
+      color: var(--muted);
+      margin-bottom: 5px;
+      font-weight: 600;
+    }
+    select, input {
+      width: 100%;
+      border: 1px solid var(--line);
+      background: #fff;
+      border-radius: 12px;
+      padding: 12px 10px;
+      font-size: 1rem;
+      color: var(--text);
+    }
+    .card {
+      background: var(--card);
+      border: 1px solid var(--line);
+      border-radius: 16px;
+      padding: 14px;
+      margin-bottom: 12px;
+    }
+    .item {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      padding: 10px 0;
+      border-bottom: 1px solid var(--line);
+    }
+    .item:last-child { border-bottom: 0; padding-bottom: 0; }
+    .item:first-child { padding-top: 0; }
+    .item .name {
+      font-size: 0.92rem;
+      font-weight: 650;
+    }
+    .item .hint {
+      font-size: 0.75rem;
+      color: var(--muted);
+    }
+    .item input {
+      max-width: 110px;
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+    }
+    .neto {
+      background: var(--neto-bg);
+      border: 1px solid #8FCBB8;
+      border-radius: 16px;
+      padding: 18px 16px;
+      text-align: center;
+    }
+    .neto span {
+      display: block;
+      color: var(--muted);
+      font-size: 0.8rem;
+      font-weight: 650;
+      margin-bottom: 4px;
+    }
+    .neto strong {
+      font-size: 1.9rem;
+      color: var(--neto);
+      font-variant-numeric: tabular-nums;
+    }
+    .status {
+      margin-top: 10px;
+      font-size: 0.78rem;
+      color: var(--muted);
+      text-align: center;
+    }
+    .detalle {
+      margin-top: 10px;
+      font-size: 0.82rem;
+      color: var(--muted);
+      display: none;
+    }
+    .detalle.open { display: block; }
+    .detalle p { margin: 4px 0; }
+    button.link {
+      background: none;
+      border: 0;
+      color: var(--primary);
+      font-weight: 700;
+      width: 100%;
+      padding: 10px 0 0;
+    }
+  </style>
+</head>
+<body>
+  <h1>Recibo de sueldo</h1>
+  <p class="sub">Versión simple · los aumentos se actualizan para todos</p>
+
+  <div class="grid">
+    <div>
+      <label>Mes</label>
+      <select id="mes"></select>
+    </div>
+    <div>
+      <label>Categoría</label>
+      <select id="categoria">
+        <option value="13">13</option>
+        <option value="16">16</option>
+        <option value="18">18</option>
+        <option value="19">19</option>
+        <option value="20" selected>20</option>
+        <option value="21">21</option>
+        <option value="22">22</option>
+        <option value="23">23</option>
+        <option value="24">24</option>
+      </select>
+    </div>
+  </div>
+
+  <div class="card">
+    <div class="item">
+      <div>
+        <div class="name">Asignación de la categoría</div>
+        <div class="hint">Cant. (días)</div>
+      </div>
+      <input id="dias" type="number" inputmode="decimal" value="24" min="0" step="1">
+    </div>
+    <div class="item">
+      <div>
+        <div class="name">Permanencia</div>
+        <div class="hint">Cant. (%)</div>
+      </div>
+      <input id="permPct" type="number" inputmode="decimal" value="3" min="0" step="0.01">
+    </div>
+    <div class="item">
+      <div>
+        <div class="name">Antigüedad al 3%</div>
+        <div class="hint">Cant. (años)</div>
+      </div>
+      <input id="ant3" type="number" inputmode="decimal" value="20" min="0" step="1">
+    </div>
+    <div class="item">
+      <div>
+        <div class="name">Suplemento fallo de caja</div>
+        <div class="hint">Cant. (independiente)</div>
+      </div>
+      <input id="cantFallo" type="number" inputmode="decimal" value="24" min="0" step="1">
+    </div>
+  </div>
+
+  <div class="neto">
+    <span>Neto a cobrar</span>
+    <strong id="neto">$ 0</strong>
+  </div>
+  <button class="link" id="btnDetalle" type="button">Ver detalle</button>
+  <div class="detalle" id="detalle"></div>
+  <p class="status" id="status">Cargando datos…</p>
+
+  <script>
+    const FALLBACK = {
+      actualizado: "agosto 26",
+      meses: {
+        "enero 26": { cats:{13:10315,16:10902,18:11719,19:13420,20:14217,21:18857,22:24051,23:31274,24:38975}, nuevoBono:6830, bonifDecreto:570544, falloCaja:3468 },
+        "febrero 26": { cats:{13:10321,16:10908,18:11719,19:13428,20:14238,21:18878,22:24076,23:31307,24:39018}, nuevoBono:7182, bonifDecreto:571163, falloCaja:3516 },
+        "marzo 26": { cats:{13:10831,16:11447,18:12305,19:14091,20:14928,21:19800,22:25254,23:32837,24:40924}, nuevoBono:7172, bonifDecreto:599072, falloCaja:3516 },
+        "abril 26": { cats:{13:11086,16:11716,18:12594,19:14422,20:15279,21:20265,22:25847,23:33609,24:41885}, nuevoBono:7340, bonifDecreto:613140, falloCaja:5223 },
+        "mayo 26": { cats:{13:11086,16:11716,18:12594,19:14422,20:15279,21:20265,22:25847,23:33609,24:41885}, nuevoBono:7340, bonifDecreto:613140, falloCaja:5308 },
+        "junio 26": { cats:{13:11086,16:11716,18:12594,19:14422,20:15279,21:20265,22:25847,23:33609,24:41885}, nuevoBono:7340, bonifDecreto:613140, falloCaja:5308 },
+        "julio 26": { cats:{13:11640,16:12302,18:13223,19:15143,20:16043,21:21278,22:27139,23:35289,24:43980}, nuevoBono:7707, bonifDecreto:643797, falloCaja:5308 },
+        "agosto 26": { cats:{13:11861,16:12536,18:13475,19:15431,20:16348,21:21684,22:27656,23:35961,24:44817}, nuevoBono:7854, bonifDecreto:656060, falloCaja:5573 }
+      }
+    };
+
+    const LS_KEY = "reciboSimpleParams";
+    const ANT1 = 5;
+    const ANT2 = 1;
+    const BASE_PERS_JUEGO = 236462;
+    const PCT_PERS_JUEGO = 0.37;
+
+    let datos = FALLBACK;
+
+    function money(n) {
+      return "$ " + Math.round(n).toLocaleString("es-AR");
+    }
+
+    function loadParams() {
+      try {
+        const p = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+        if (p.dias != null) document.getElementById("dias").value = p.dias;
+        if (p.permPct != null) document.getElementById("permPct").value = p.permPct;
+        if (p.ant3 != null) document.getElementById("ant3").value = p.ant3;
+        if (p.cantFallo != null) document.getElementById("cantFallo").value = p.cantFallo;
+        if (p.categoria) document.getElementById("categoria").value = p.categoria;
+      } catch (e) {}
+    }
+
+    function saveParams() {
+      localStorage.setItem(LS_KEY, JSON.stringify({
+        dias: document.getElementById("dias").value,
+        permPct: document.getElementById("permPct").value,
+        ant3: document.getElementById("ant3").value,
+        cantFallo: document.getElementById("cantFallo").value,
+        categoria: document.getElementById("categoria").value,
+        mes: document.getElementById("mes").value
+      }));
+    }
+
+    function fillMeses() {
+      const sel = document.getElementById("mes");
+      const meses = Object.keys(datos.meses);
+      let savedMes = null;
+      try { savedMes = JSON.parse(localStorage.getItem(LS_KEY) || "{}").mes; } catch (e) {}
+      sel.innerHTML = meses.map(m => `<option value="${m}">${m}</option>`).join("");
+      if (savedMes && datos.meses[savedMes]) sel.value = savedMes;
+      else if (datos.actualizado && datos.meses[datos.actualizado]) sel.value = datos.actualizado;
+      else sel.value = meses[meses.length - 1];
+    }
+
+    function calcular() {
+      const mes = document.getElementById("mes").value;
+      const cat = document.getElementById("categoria").value;
+      const d = datos.meses[mes];
+      if (!d) return;
+
+      const dias = parseFloat(document.getElementById("dias").value) || 0;
+      const permPct = parseFloat(document.getElementById("permPct").value) || 0;
+      const ant3 = parseFloat(document.getElementById("ant3").value) || 0;
+      const cantFallo = parseFloat(document.getElementById("cantFallo").value) || 0;
+      const catNum = parseInt(cat, 10);
+      const asigUnit = d.cats[cat];
+      if (asigUnit == null) return;
+
+      const asigTotal = Math.round(asigUnit * dias);
+      const respTotal = catNum >= 20 ? asigTotal : 0;
+      const permanencia = Math.round(asigTotal * (permPct / 100));
+      const ant1Monto = Math.round(ANT1 * asigTotal * 0.01);
+      const ant2Monto = Math.round(ANT2 * asigTotal * 0.02);
+      const ant3Monto = Math.round(ant3 * asigTotal * 0.03);
+      const nuevoBonoTotal = Math.round(d.nuevoBono * dias);
+      const falloTotal = Math.round(d.falloCaja * cantFallo);
+      const bonifTotal = Math.round(d.bonifDecreto);
+      const bonifPersJuego = Math.round(BASE_PERS_JUEGO * PCT_PERS_JUEGO);
+
+      const totalC = asigTotal + respTotal + permanencia + ant1Monto + ant2Monto + ant3Monto +
+                     nuevoBonoTotal + bonifTotal + bonifPersJuego;
+      const totalS = falloTotal;
+      const totalD = Math.round(totalC * 0.14) + Math.round(totalC * 0.048) + Math.round(totalC * 0.04);
+      const neto = totalC + totalS - totalD;
+
+      document.getElementById("neto").textContent = money(neto);
+      document.getElementById("detalle").innerHTML =
+        `<p>Asignación: ${money(asigTotal)}</p>` +
+        `<p>Responsabilidad jerárquica: ${money(respTotal)}</p>` +
+        `<p>Permanencia: ${money(permanencia)}</p>` +
+        `<p>Antigüedad 1% / 2% / 3%: ${money(ant1Monto)} / ${money(ant2Monto)} / ${money(ant3Monto)}</p>` +
+        `<p>Nuevo bono: ${money(nuevoBonoTotal)}</p>` +
+        `<p>Bonif. decreto: ${money(bonifTotal)}</p>` +
+        `<p>Fallo de caja: ${money(falloTotal)}</p>` +
+        `<p>Haberes: ${money(totalC + totalS)} · Descuentos: ${money(totalD)}</p>`;
+      saveParams();
+    }
+
+    async function init() {
+      loadParams();
+      try {
+        const res = await fetch("datos.json?t=" + Date.now());
+        if (res.ok) {
+          datos = await res.json();
+          document.getElementById("status").textContent =
+            "Datos actualizados: " + (datos.actualizado || "ok");
+        } else {
+          document.getElementById("status").textContent = "Usando datos locales (no se pudo leer datos.json)";
+        }
+      } catch (e) {
+        document.getElementById("status").textContent = "Usando datos locales (sin conexión al archivo compartido)";
+      }
+      fillMeses();
+      calcular();
+    }
+
+    ["mes","categoria","dias","permPct","ant3","cantFallo"].forEach(id => {
+      document.getElementById(id).addEventListener("input", calcular);
+      document.getElementById(id).addEventListener("change", calcular);
+    });
+    document.getElementById("btnDetalle").addEventListener("click", () => {
+      const el = document.getElementById("detalle");
+      const open = el.classList.toggle("open");
+      document.getElementById("btnDetalle").textContent = open ? "Ocultar detalle" : "Ver detalle";
+    });
+
+    init();
+  </script>
+</body>
+</html>
