@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="es-AR">
 <head>
@@ -14,7 +13,6 @@
       --muted: #6B7F7B;
       --line: #D5E3E0;
       --primary: #0D6B63;
-      --primary-soft: #E7F4F2;
       --neto: #1A4F47;
       --neto-bg: #D8EFE8;
     }
@@ -26,15 +24,8 @@
       color: var(--text);
       padding: 16px 14px 32px;
     }
-    h1 {
-      font-size: 1.15rem;
-      margin: 0 0 4px;
-    }
-    .sub {
-      color: var(--muted);
-      font-size: 0.85rem;
-      margin-bottom: 16px;
-    }
+    h1 { font-size: 1.15rem; margin: 0 0 4px; }
+    .sub { color: var(--muted); font-size: 0.85rem; margin-bottom: 16px; }
     .grid {
       display: grid;
       grid-template-columns: 1fr 1fr;
@@ -48,7 +39,7 @@
       margin-bottom: 5px;
       font-weight: 600;
     }
-    select, input {
+    select {
       width: 100%;
       border: 1px solid var(--line);
       background: #fff;
@@ -74,15 +65,9 @@
     }
     .item:last-child { border-bottom: 0; padding-bottom: 0; }
     .item:first-child { padding-top: 0; }
-    .item .name {
-      font-size: 0.92rem;
-      font-weight: 650;
-    }
-    .item .hint {
-      font-size: 0.75rem;
-      color: var(--muted);
-    }
-    .item input {
+    .item .name { font-size: 0.92rem; font-weight: 650; }
+    .item .hint { font-size: 0.75rem; color: var(--muted); }
+    .item select {
       max-width: 110px;
       text-align: right;
       font-variant-numeric: tabular-nums;
@@ -106,18 +91,8 @@
       color: var(--neto);
       font-variant-numeric: tabular-nums;
     }
-    .status {
-      margin-top: 10px;
-      font-size: 0.78rem;
-      color: var(--muted);
-      text-align: center;
-    }
-    .detalle {
-      margin-top: 10px;
-      font-size: 0.82rem;
-      color: var(--muted);
-      display: none;
-    }
+    .status { margin-top: 10px; font-size: 0.78rem; color: var(--muted); text-align: center; }
+    .detalle { margin-top: 10px; font-size: 0.82rem; color: var(--muted); display: none; }
     .detalle.open { display: block; }
     .detalle p { margin: 4px 0; }
     button.link {
@@ -161,28 +136,28 @@
         <div class="name">Asignación de la categoría</div>
         <div class="hint">Cant. (días)</div>
       </div>
-      <input id="dias" type="number" inputmode="decimal" value="24" min="0" step="1">
+      <select id="dias"></select>
     </div>
     <div class="item">
       <div>
         <div class="name">Permanencia</div>
         <div class="hint">Cant. (%)</div>
       </div>
-      <input id="permPct" type="number" inputmode="decimal" value="3" min="0" step="0.01">
+      <select id="permPct"></select>
     </div>
     <div class="item">
       <div>
         <div class="name">Antigüedad al 3%</div>
         <div class="hint">Cant. (años)</div>
       </div>
-      <input id="ant3" type="number" inputmode="decimal" value="20" min="0" step="1">
+      <select id="ant3"></select>
     </div>
     <div class="item">
       <div>
         <div class="name">Suplemento fallo de caja</div>
         <div class="hint">Cant. (independiente)</div>
       </div>
-      <input id="cantFallo" type="number" inputmode="decimal" value="24" min="0" step="1">
+      <select id="cantFallo"></select>
     </div>
   </div>
 
@@ -196,40 +171,45 @@
 
   <script>
     const FALLBACK = {
-      actualizado: "agosto 26",
+      actualizado: "septiembre 26",
+      basePersJuego: 236462,
+      pctPersJuego: 0.37,
       meses: {
-        "enero 26": { cats:{13:10315,16:10902,18:11719,19:13420,20:14217,21:18857,22:24051,23:31274,24:38975}, nuevoBono:6830, bonifDecreto:570544, falloCaja:3468 },
-        "febrero 26": { cats:{13:10321,16:10908,18:11719,19:13428,20:14238,21:18878,22:24076,23:31307,24:39018}, nuevoBono:7182, bonifDecreto:571163, falloCaja:3516 },
-        "marzo 26": { cats:{13:10831,16:11447,18:12305,19:14091,20:14928,21:19800,22:25254,23:32837,24:40924}, nuevoBono:7172, bonifDecreto:599072, falloCaja:3516 },
-        "abril 26": { cats:{13:11086,16:11716,18:12594,19:14422,20:15279,21:20265,22:25847,23:33609,24:41885}, nuevoBono:7340, bonifDecreto:613140, falloCaja:5223 },
-        "mayo 26": { cats:{13:11086,16:11716,18:12594,19:14422,20:15279,21:20265,22:25847,23:33609,24:41885}, nuevoBono:7340, bonifDecreto:613140, falloCaja:5308 },
-        "junio 26": { cats:{13:11086,16:11716,18:12594,19:14422,20:15279,21:20265,22:25847,23:33609,24:41885}, nuevoBono:7340, bonifDecreto:613140, falloCaja:5308 },
-        "julio 26": { cats:{13:11640,16:12302,18:13223,19:15143,20:16043,21:21278,22:27139,23:35289,24:43980}, nuevoBono:7707, bonifDecreto:643797, falloCaja:5308 },
-        "agosto 26": { cats:{13:11861,16:12536,18:13475,19:15431,20:16348,21:21684,22:27656,23:35961,24:44817}, nuevoBono:7854, bonifDecreto:656060, falloCaja:5573 }
+        "agosto 26": { cats:{13:11861,16:12536,18:13475,19:15431,20:16348,21:21684,22:27656,23:35961,24:44817}, nuevoBono:7854, bonifDecreto:656060, falloCaja:5573 },
+        "septiembre 26": { cats:{13:12100,16:12787,18:13745,19:15740,20:16675,21:22118,22:28209,23:36680,24:45713}, nuevoBono:8011, bonifDecreto:669181, falloCaja:5684 }
       }
     };
 
     const LS_KEY = "reciboSimpleParams";
     const ANT1 = 5;
     const ANT2 = 1;
-    const BASE_PERS_JUEGO = 236462;
-    const PCT_PERS_JUEGO = 0.37;
-
     let datos = FALLBACK;
+
+    function fillRange(id, from, to, selected) {
+      const sel = document.getElementById(id);
+      sel.innerHTML = "";
+      for (let i = from; i <= to; i++) {
+        const opt = document.createElement("option");
+        opt.value = i;
+        opt.textContent = i;
+        if (i === selected) opt.selected = true;
+        sel.appendChild(opt);
+      }
+    }
 
     function money(n) {
       return "$ " + Math.round(n).toLocaleString("es-AR");
     }
 
     function loadParams() {
-      try {
-        const p = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
-        if (p.dias != null) document.getElementById("dias").value = p.dias;
-        if (p.permPct != null) document.getElementById("permPct").value = p.permPct;
-        if (p.ant3 != null) document.getElementById("ant3").value = p.ant3;
-        if (p.cantFallo != null) document.getElementById("cantFallo").value = p.cantFallo;
-        if (p.categoria) document.getElementById("categoria").value = p.categoria;
-      } catch (e) {}
+      let p = {};
+      try { p = JSON.parse(localStorage.getItem(LS_KEY) || "{}"); } catch (e) {}
+      fillRange("dias", 1, 31, parseInt(p.dias, 10) || 24);
+      fillRange("permPct", 1, 8, parseInt(p.permPct, 10) || 3);
+      fillRange("ant3", 1, 25, parseInt(p.ant3, 10) || 20);
+      fillRange("cantFallo", 0, 31, p.cantFallo != null ? parseInt(p.cantFallo, 10) : 24);
+      if (p.categoria) document.getElementById("categoria").value = p.categoria;
+      return p;
     }
 
     function saveParams() {
@@ -243,11 +223,9 @@
       }));
     }
 
-    function fillMeses() {
+    function fillMeses(savedMes) {
       const sel = document.getElementById("mes");
       const meses = Object.keys(datos.meses);
-      let savedMes = null;
-      try { savedMes = JSON.parse(localStorage.getItem(LS_KEY) || "{}").mes; } catch (e) {}
       sel.innerHTML = meses.map(m => `<option value="${m}">${m}</option>`).join("");
       if (savedMes && datos.meses[savedMes]) sel.value = savedMes;
       else if (datos.actualizado && datos.meses[datos.actualizado]) sel.value = datos.actualizado;
@@ -268,6 +246,9 @@
       const asigUnit = d.cats[cat];
       if (asigUnit == null) return;
 
+      const basePers = Number(datos.basePersJuego || 0);
+      const pctPers = Number(datos.pctPersJuego || 0);
+
       const asigTotal = Math.round(asigUnit * dias);
       const respTotal = catNum >= 20 ? asigTotal : 0;
       const permanencia = Math.round(asigTotal * (permPct / 100));
@@ -277,7 +258,7 @@
       const nuevoBonoTotal = Math.round(d.nuevoBono * dias);
       const falloTotal = Math.round(d.falloCaja * cantFallo);
       const bonifTotal = Math.round(d.bonifDecreto);
-      const bonifPersJuego = Math.round(BASE_PERS_JUEGO * PCT_PERS_JUEGO);
+      const bonifPersJuego = Math.round(basePers * pctPers);
 
       const totalC = asigTotal + respTotal + permanencia + ant1Monto + ant2Monto + ant3Monto +
                      nuevoBonoTotal + bonifTotal + bonifPersJuego;
@@ -293,13 +274,14 @@
         `<p>Antigüedad 1% / 2% / 3%: ${money(ant1Monto)} / ${money(ant2Monto)} / ${money(ant3Monto)}</p>` +
         `<p>Nuevo bono: ${money(nuevoBonoTotal)}</p>` +
         `<p>Bonif. decreto: ${money(bonifTotal)}</p>` +
+        `<p>Bonif. Pers. Juego (${Math.round(pctPers * 100)}% de ${money(basePers)}): ${money(bonifPersJuego)}</p>` +
         `<p>Fallo de caja: ${money(falloTotal)}</p>` +
         `<p>Haberes: ${money(totalC + totalS)} · Descuentos: ${money(totalD)}</p>`;
       saveParams();
     }
 
     async function init() {
-      loadParams();
+      const saved = loadParams();
       try {
         const res = await fetch("datos.json?t=" + Date.now());
         if (res.ok) {
@@ -307,17 +289,16 @@
           document.getElementById("status").textContent =
             "Datos actualizados: " + (datos.actualizado || "ok");
         } else {
-          document.getElementById("status").textContent = "Usando datos locales (no se pudo leer datos.json)";
+          document.getElementById("status").textContent = "Usando datos locales";
         }
       } catch (e) {
-        document.getElementById("status").textContent = "Usando datos locales (sin conexión al archivo compartido)";
+        document.getElementById("status").textContent = "Usando datos locales";
       }
-      fillMeses();
+      fillMeses(saved.mes);
       calcular();
     }
 
     ["mes","categoria","dias","permPct","ant3","cantFallo"].forEach(id => {
-      document.getElementById(id).addEventListener("input", calcular);
       document.getElementById(id).addEventListener("change", calcular);
     });
     document.getElementById("btnDetalle").addEventListener("click", () => {
