@@ -548,6 +548,7 @@
   <div class="container">
     <h1>Calculador de Recibo de Sueldo</h1>
     <p class="subtitle">Seleccioná categoría y mes · Cargá aumentos futuros · Calculá el neto automáticamente</p>
+    <p id="estadoNube" style="font-size:0.78rem; color:var(--muted); margin:-6px 0 12px; text-align:center;">Usando datos guardados en la app</p>
 
     <!-- CONTROLES PRINCIPALES -->
     <div class="controls">
@@ -863,8 +864,10 @@
   </div>
 
   <script>
-    // ========== DATOS ORIGINALES (inmutables) ==========
-    const dataOriginal = {
+    // ========== DATOS DE LOS MESES ==========
+    // Los meses "oficiales" vienen de Firebase (el mismo documento recibo/datos que usa
+    // Recibo simple). Esto es solo el respaldo por si nunca se pudo conectar.
+    const DATOS_RESPALDO = {
       "enero 26": {
         cats: {13:10315, 16:10902, 18:11719, 19:13420, 20:14217, 21:18857, 22:24051, 23:31274, 24:38975},
         nuevoBono: 6830, bonifDecreto: 570544, falloCaja: 3468, aumentoMensual: 0
@@ -896,8 +899,53 @@
       "agosto 26": {
         cats: {13:11861, 16:12536, 18:13475, 19:15431, 20:16348, 21:21684, 22:27656, 23:35961, 24:44817},
         nuevoBono: 7854, bonifDecreto: 656060, falloCaja: 5573, aumentoMensual: 2.00
+      },
+      "septiembre 26": {
+        cats: {13:11861, 16:12536, 18:13475, 19:15431, 20:16348, 21:21684, 22:27656, 23:35961, 24:44817},
+        nuevoBono: 7854, bonifDecreto: 656060, falloCaja: 5573
+      },
+      "octubre 26": {
+        cats: {13:12217, 16:12912, 18:13879, 19:15894, 20:16838, 21:22335, 22:28486, 23:37040, 24:46162},
+        nuevoBono: 8090, bonifDecreto: 675742, falloCaja: 5740
+      },
+      "noviembre 26": {
+        cats: {13:12573, 16:13288, 18:14284, 19:16357, 20:17329, 21:22985, 22:29315, 23:38119, 24:47506},
+        nuevoBono: 8325, bonifDecreto: 695424, falloCaja: 5907
       }
     };
+
+    const NOMBRES_MES = ["enero","febrero","marzo","abril","mayo","junio","julio","agosto","septiembre","octubre","noviembre","diciembre"];
+
+    // Orden cronológico ("agosto 26" → 26*12+7). Firebase no conserva el orden de las claves.
+    function ordenMes(m) {
+      const [n, a] = String(m).trim().toLowerCase().split(/\s+/);
+      const i = NOMBRES_MES.indexOf(n);
+      return (parseInt(a, 10) || 0) * 12 + (i < 0 ? 11.5 : i);
+    }
+    function ordenarMeses(obj) {
+      const out = {};
+      Object.keys(obj).sort((a, b) => ordenMes(a) - ordenMes(b)).forEach(k => { out[k] = obj[k]; });
+      return out;
+    }
+
+    // Meses oficiales en uso: los de la nube (o la última copia guardada), si no el respaldo
+    const LS_NUBE = 'reciboNubeDatos';
+    let dataOriginal = ordenarMeses(DATOS_RESPALDO);
+    let mesActualizado = 'noviembre 26';
+    try {
+      const guardado = JSON.parse(localStorage.getItem(LS_NUBE) || 'null');
+      if (guardado && guardado.meses && Object.keys(guardado.meses).length) {
+        dataOriginal = ordenarMeses(guardado.meses);
+        mesActualizado = guardado.actualizado || mesActualizado;
+      }
+    } catch (e) { /* sin copia guardada */ }
+
+    // Mes que se muestra por defecto: el último cargado
+    function mesPorDefecto() {
+      if (dataOriginal[mesActualizado]) return mesActualizado;
+      const ks = Object.keys(dataOriginal);
+      return ks[ks.length - 1];
+    }
 
     // Meses personalizados (se guardan en localStorage)
     let dataCustom = JSON.parse(localStorage.getItem('reciboCustomMeses') || '{}');
@@ -910,12 +958,8 @@
     let chartInflacion = null;
 
     // Orden cronológico de meses conocidos
-    const ORDEN_MESES = [
-      "enero 26","febrero 26","marzo 26","abril 26","mayo 26","junio 26","julio 26","agosto 26",
-      "septiembre 26","octubre 26","noviembre 26","diciembre 26",
-      "enero 27","febrero 27","marzo 27","abril 27","mayo 27","junio 27",
-      "julio 27","agosto 27","septiembre 27","octubre 27","noviembre 27","diciembre 27"
-    ];
+    const ORDEN_MESES = [];
+    for (let a = 26; a <= 29; a++) NOMBRES_MES.forEach(n => ORDEN_MESES.push(n + ' ' + a));
 
     // La comparación sueldo vs inflación arranca acá (evita distorsiones de meses previos)
     const MES_INICIO_COMPARACION = "mayo 26";
@@ -940,13 +984,14 @@
     function getMes() { return document.getElementById('mes').value; }
     function getCat() { return document.getElementById('categoria').value; }
 
+    // Proyección cargada en esta PC (★). Si ese mes ya llegó de la nube, manda la nube.
     function esMesCustom(mes) {
-      return !!dataCustom[mes];
+      return !!dataCustom[mes] && !dataOriginal[mes];
     }
 
     function getDataMes(mes) {
-      if (dataCustom[mes]) return dataCustom[mes];
-      return dataOriginal[mes];
+      if (dataOriginal[mes]) return dataOriginal[mes];
+      return dataCustom[mes];
     }
 
     function cargarBases() {
@@ -1494,7 +1539,7 @@
       delete dataCustom[mes];
       localStorage.setItem('reciboCustomMeses', JSON.stringify(dataCustom));
       actualizarSelectMeses();
-      document.getElementById('mes').value = 'agosto 26';
+      document.getElementById('mes').value = mesPorDefecto();
       cargarBases();
       calcular();
     }
@@ -1504,8 +1549,8 @@
       const selectBase = document.getElementById('mesBaseAumento');
       const selectCuotasBase = document.getElementById('cuotasMesBase');
       const valorActual = select.value;
-      const valorBaseActual = selectBase ? selectBase.value : 'agosto 26';
-      const valorCuotasBase = selectCuotasBase ? selectCuotasBase.value : 'agosto 26';
+      const valorBaseActual = selectBase ? selectBase.value : mesPorDefecto();
+      const valorCuotasBase = selectCuotasBase ? selectCuotasBase.value : mesPorDefecto();
 
       select.innerHTML = '';
       if (selectBase) selectBase.innerHTML = '';
@@ -1534,26 +1579,29 @@
       }
 
       Object.keys(dataOriginal).forEach(m => agregarOpcion(m, false));
-      Object.keys(dataCustom).forEach(m => agregarOpcion(m, true));
+      Object.keys(dataCustom)
+        .filter(m => !dataOriginal[m])
+        .sort((a, b) => ordenMes(a) - ordenMes(b))
+        .forEach(m => agregarOpcion(m, true));
 
       // Restaurar selecciones
       if ([...select.options].some(o => o.value === valorActual)) {
         select.value = valorActual;
       } else {
-        select.value = 'agosto 26';
+        select.value = mesPorDefecto();
       }
       if (selectBase) {
-        selectBase.value = [...selectBase.options].some(o => o.value === valorBaseActual) ? valorBaseActual : 'agosto 26';
+        selectBase.value = [...selectBase.options].some(o => o.value === valorBaseActual) ? valorBaseActual : mesPorDefecto();
       }
       if (selectCuotasBase) {
-        selectCuotasBase.value = [...selectCuotasBase.options].some(o => o.value === valorCuotasBase) ? valorCuotasBase : 'agosto 26';
+        selectCuotasBase.value = [...selectCuotasBase.options].some(o => o.value === valorCuotasBase) ? valorCuotasBase : mesPorDefecto();
       }
     }
 
     function renderMesesRegistrados() {
       const cont = document.getElementById('mesesRegistrados');
       if (!cont) return;
-      const keys = Object.keys(dataCustom);
+      const keys = Object.keys(dataCustom).filter(m => !dataOriginal[m]);
       if (keys.length === 0) {
         cont.innerHTML = `<div style="color:var(--proyeccion-text); font-size:0.88rem; opacity:0.85;">No hay meses futuros registrados todavía.</div>`;
         return;
@@ -1628,11 +1676,14 @@
 
     // % de la cuota / tramo anunciado (informativo)
     function getAumentoAnunciado(mes) {
+      const o = dataOriginal[mes];
+      if (o) {
+        if (o.aumentoMensual != null) return parseFloat(o.aumentoMensual) || 0;
+        if (o.aumentoSobreBase != null) return parseFloat(o.aumentoSobreBase) || 0;
+        return 0;
+      }
       if (dataCustom[mes] && dataCustom[mes].aumentoAplicado != null) {
         return parseFloat(dataCustom[mes].aumentoAplicado) || 0;
-      }
-      if (dataOriginal[mes] && dataOriginal[mes].aumentoMensual != null) {
-        return parseFloat(dataOriginal[mes].aumentoMensual) || 0;
       }
       return 0;
     }
@@ -1805,7 +1856,7 @@
 
         html += `
           <tr style="background:${bg}; border-bottom:1px solid var(--border);">
-            <td style="padding:7px 8px; font-weight:600;">${mes}${dataCustom[mes] ? ' ★' : ''}</td>
+            <td style="padding:7px 8px; font-weight:600;">${mes}${esMesCustom(mes) ? ' ★' : ''}</td>
             <td style="padding:7px 8px; text-align:right; color:var(--muted);">${anunciado ? anunciado.toFixed(2) : '0,00'}</td>
             <td style="padding:7px 8px; text-align:right; font-weight:600;">${(i === 0 || mom == null) ? '—' : mom.toFixed(2)}</td>
             <td style="padding:7px 8px; text-align:right;">
@@ -1940,6 +1991,7 @@
 
     // Inicial
     actualizarSelectMeses();
+    document.getElementById('mes').value = mesPorDefecto();
     cargarBases();
     calcular();
   </script>
@@ -2090,6 +2142,37 @@
     // Reaplicar paleta al cambiar claro/oscuro
     const _origThemeApply = null; // hook via observer below
 
+    // ========== DATOS DE LA NUBE (Firebase) ==========
+    let mesElegidoAMano = false;
+    document.getElementById('mes').addEventListener('change', () => { mesElegidoAMano = true; });
+
+    function estadoNube(txt) {
+      const el = document.getElementById('estadoNube');
+      if (el) el.textContent = txt;
+    }
+
+    // Llamada desde el módulo de Firebase cada vez que cambia recibo/datos
+    function aplicarDatosNube(remoto, desdeCache) {
+      if (!remoto || !remoto.meses || !Object.keys(remoto.meses).length) return;
+      dataOriginal = ordenarMeses(remoto.meses);
+      if (remoto.actualizado) mesActualizado = remoto.actualizado;
+      try { localStorage.setItem(LS_NUBE, JSON.stringify({ actualizado: remoto.actualizado, meses: remoto.meses })); } catch (e) {}
+
+      const sel = document.getElementById('mes');
+      const previo = sel.value;
+      actualizarSelectMeses();
+      sel.value = (!mesElegidoAMano || ![...sel.options].some(o => o.value === previo)) ? mesPorDefecto() : previo;
+      basesActuales = null;
+      cargarBases();
+      calcular();
+      const infl = document.getElementById('inflacionPanel');
+      if (infl && infl.style.display !== 'none') renderInflacion();
+
+      estadoNube(desdeCache
+        ? 'Sin conexión · usando lo último sincronizado'
+        : 'Sincronizado con Recibo simple · último mes: ' + (remoto.actualizado || '—'));
+    }
+
     // ========== EXPORT / IMPORT CACHE ==========
     function recolectarCache() {
       return {
@@ -2179,14 +2262,14 @@
         if (!sel) return;
         const prev = sel.value || current;
         sel.innerHTML = items.map(v => {
-          const label = (dataCustom[v] ? v + ' ★' : v);
+          const label = (esMesCustom(v) ? v + ' ★' : v);
           return '<option value="' + v + '">' + (id.indexOf('Cat') >= 0 ? 'Categoría ' + v : label) + '</option>';
         }).join('');
         if ([...sel.options].some(o => o.value === prev)) sel.value = prev;
         else if ([...sel.options].some(o => o.value === current)) sel.value = current;
       }
 
-      const mesActual = document.getElementById('mes').value || 'agosto 26';
+      const mesActual = document.getElementById('mes').value || mesPorDefecto();
       const catActual = document.getElementById('categoria').value || '20';
       fill('cmpMesA', meses, mesActual);
       fill('cmpMesB', meses, 'abril 26');
@@ -2380,7 +2463,7 @@
       const btn = document.getElementById('themeToggle');
       if (btn) btn.textContent = '🌙';
       actualizarSelectMeses();
-      document.getElementById('mes').value = 'agosto 26';
+      document.getElementById('mes').value = mesPorDefecto();
       aplicarPaleta('suave');
       renderPaletas();
       cargarBases();
@@ -2430,6 +2513,40 @@
     // Init paletas (después de definir funciones)
     renderPaletas();
     aplicarPaleta(localStorage.getItem('reciboPaleta') || 'suave');
+  </script>
+
+  <script type="module">
+    // Lee los meses del mismo Firebase que Recibo simple (solo lectura).
+    // Los aumentos oficiales se cargan desde Recibo simple; acá aparecen solos.
+    const FIREBASE_CONFIG = {
+      apiKey: "AIzaSyADOsIf2nLapSXrQl_NIZif5g8k5r3bShw",
+      authDomain: "contador-a1d3e.firebaseapp.com",
+      projectId: "contador-a1d3e",
+      storageBucket: "contador-a1d3e.firebasestorage.app",
+      messagingSenderId: "160590135521",
+      appId: "1:160590135521:web:605523a65c4fa92f5b37a0"
+    };
+    const base = "https://www.gstatic.com/firebasejs/10.12.2/";
+    try {
+      const [appM, fsM] = await Promise.all([
+        import(base + "firebase-app.js"),
+        import(base + "firebase-firestore.js")
+      ]);
+      const app = appM.initializeApp(FIREBASE_CONFIG);
+      let db;
+      try { db = fsM.initializeFirestore(app, { localCache: fsM.persistentLocalCache() }); }
+      catch (e) { db = fsM.getFirestore(app); }
+      fsM.onSnapshot(fsM.doc(db, "recibo", "datos"), snap => {
+        if (snap.exists()) window.aplicarDatosNube(snap.data(), snap.metadata.fromCache);
+        else window.estadoNube("Firebase conectado · todavía no hay meses en la nube");
+      }, err => {
+        console.warn(err);
+        window.estadoNube("No se pudo leer Firebase · usando lo último guardado");
+      });
+    } catch (e) {
+      console.warn("Firebase no disponible:", e);
+      window.estadoNube("Sin conexión · usando lo último guardado");
+    }
   </script>
 
   <script>

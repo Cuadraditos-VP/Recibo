@@ -32,19 +32,20 @@ self.addEventListener('activate', (event) => {
 // Estrategia: cache-first para el shell, con actualización en segundo plano.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  // Archivos de otros sitios (Firebase, gráficos) van directo a la red.
+  if (!event.request.url.startsWith(self.location.origin)) return;
 
   event.respondWith(
     caches.match(event.request).then((cached) => {
       const fetchPromise = fetch(event.request)
         .then((response) => {
-          // Solo cacheamos respuestas válidas del mismo origen (no CDNs externos)
-          if (response && response.ok && event.request.url.startsWith(self.location.origin)) {
+          if (response && response.ok) {
             const clone = response.clone();
             caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
           }
           return response;
         })
-        .catch(() => cached || caches.match('./index.html'));
+        .catch(() => cached || (event.request.mode === 'navigate' ? caches.match('./index.html') : Response.error()));
 
       // Si hay algo en caché, lo servimos al instante y actualizamos atrás.
       return cached || fetchPromise;
