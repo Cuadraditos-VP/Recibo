@@ -1,4 +1,6 @@
-const CACHE_NAME = 'recibo-sueldo-v2';
+// Service worker de "Calculador de Recibo de Sueldo"
+// Cachea el shell de la app para que funcione sin conexión.
+const CACHE_NAME = 'recibo-sueldo-v3';
 const CORE_ASSETS = [
   './',
   './index.html',
@@ -11,29 +13,42 @@ const CORE_ASSETS = [
 
 self.addEventListener('install', (event) => {
   event.waitUntil(
-    caches.open(CACHE_NAME).then((cache) => cache.addAll(CORE_ASSETS))
+    caches.open(CACHE_NAME)
+      .then((cache) => cache.addAll(CORE_ASSETS))
+      .then(() => self.skipWaiting())
   );
-  self.skipWaiting();
 });
 
 self.addEventListener('activate', (event) => {
   event.waitUntil(
-    caches.keys().then((keys) =>
-      Promise.all(keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k)))
-    )
+    caches.keys()
+      .then((keys) => Promise.all(
+        keys.filter((k) => k !== CACHE_NAME).map((k) => caches.delete(k))
+      ))
+      .then(() => self.clients.claim())
   );
-  self.clients.claim();
 });
 
+// Estrategia: cache-first para el shell, con actualización en segundo plano.
 self.addEventListener('fetch', (event) => {
   if (event.request.method !== 'GET') return;
+  // Archivos de otros sitios (Firebase, gráficos) van directo a la red.
+  if (!event.request.url.startsWith(self.location.origin)) return;
+
   event.respondWith(
-    fetch(event.request)
-      .then((response) => {
-        const copy = response.clone();
-        caches.open(CACHE_NAME).then((cache) => cache.put(event.request, copy));
-        return response;
-      })
-      .catch(() => caches.match(event.request))
+    caches.match(event.request).then((cached) => {
+      const fetchPromise = fetch(event.request)
+        .then((response) => {
+          if (response && response.ok) {
+            const clone = response.clone();
+            caches.open(CACHE_NAME).then((cache) => cache.put(event.request, clone));
+          }
+          return response;
+        })
+        .catch(() => cached || (event.request.mode === 'navigate' ? caches.match('./index.html') : Response.error()));
+
+      // Si hay algo en caché, lo servimos al instante y actualizamos atrás.
+      return cached || fetchPromise;
+    })
   );
 });
