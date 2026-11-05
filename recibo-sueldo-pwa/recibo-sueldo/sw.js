@@ -1,6 +1,6 @@
 // Service worker de "Calculador de Recibo de Sueldo"
 // Cachea el shell de la app para que funcione sin conexión.
-const CACHE_NAME = 'recibo-sueldo-v3';
+const CACHE_NAME = 'recibo-sueldo-v4';
 const CORE_ASSETS = [
   './',
   './index.html',
