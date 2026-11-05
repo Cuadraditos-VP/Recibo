@@ -2169,7 +2169,7 @@
       if (infl && infl.style.display !== 'none') renderInflacion();
 
       estadoNube(desdeCache
-        ? 'Sin conexión · usando lo último sincronizado'
+        ? 'Conectando… · usando lo último sincronizado'
         : 'Sincronizado con Recibo simple · último mes: ' + (remoto.actualizado || '—'));
     }
 
@@ -2536,7 +2536,8 @@
       let db;
       try { db = fsM.initializeFirestore(app, { localCache: fsM.persistentLocalCache() }); }
       catch (e) { db = fsM.getFirestore(app); }
-      fsM.onSnapshot(fsM.doc(db, "recibo", "datos"), snap => {
+      // includeMetadataChanges: avisa también cuando la nube confirma que los datos guardados están al día
+      fsM.onSnapshot(fsM.doc(db, "recibo", "datos"), { includeMetadataChanges: true }, snap => {
         if (snap.exists()) window.aplicarDatosNube(snap.data(), snap.metadata.fromCache);
         else window.estadoNube("Firebase conectado · todavía no hay meses en la nube");
       }, err => {
