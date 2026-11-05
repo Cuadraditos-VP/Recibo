@@ -622,6 +622,9 @@
     <!-- PANEL REGISTRAR AUMENTOS (cerrado por defecto) -->
     <div class="proyeccion" id="aumentosPanel" style="display:none; flex-direction:column; align-items:stretch; margin-bottom:16px;">
       <h3>📅 Registrar aumentos</h3>
+      <p id="destinoAumentos" style="font-size:0.82rem; margin:-4px 0 12px; line-height:1.4; color:var(--proyeccion-text);">
+        Lo que registres acá queda <strong>solo en esta PC</strong> (★). Para que llegue al celular, habilitá esta PC en "Apariencia y datos".
+      </p>
 
       <div style="display:flex; gap:8px; margin-bottom:12px;">
         <button type="button" class="btn btn-outline" id="tabSimple" onclick="mostrarTab('simple')" style="flex:1;">Aumento simple</button>
@@ -754,6 +757,18 @@
         <button type="button" class="btn btn-outline" onclick="limpiarCacheLocal()" style="border-color:var(--discount); color:var(--discount);">🗑 Limpiar datos locales</button>
       </div>
       <p id="cacheStatus" style="font-size:0.8rem; color:var(--muted); margin-top:10px;"></p>
+
+      <h3 style="margin-top:22px;">Cargar aumentos desde esta PC</h3>
+      <p style="font-size:0.85rem; color:var(--muted); margin-bottom:10px; line-height:1.45;">
+        Para que los aumentos que registres acá lleguen también al celular, esta PC tiene que estar habilitada
+        en las reglas de Firebase, igual que el celular. Tocá el botón, copiá el código y agregalo a las reglas.
+      </p>
+      <div style="display:flex; flex-wrap:wrap; gap:10px; align-items:center;">
+        <button type="button" class="btn btn-outline" id="btnCodigoPC" onclick="mostrarCodigoPC()">Ver código de esta PC</button>
+        <code id="codigoPC" style="display:none; padding:6px 10px; border:1px solid var(--border); border-radius:6px; user-select:all; word-break:break-all;"></code>
+        <button type="button" class="btn btn-outline" id="btnCopiarCodigoPC" style="display:none;" onclick="copiarCodigoPC()">Copiar</button>
+      </div>
+      <p id="adminEstado" style="font-size:0.82rem; color:var(--muted); margin-top:8px;"></p>
     </div>
 
     <!-- RECIBO CALCULADO -->
@@ -1397,7 +1412,7 @@
           alert(`Completá correctamente la cuota ${i}`);
           return;
         }
-        if (dataOriginal[mes] || dataCustom[mes]) {
+        if (dataOriginal[mes] || (dataCustom[mes] && !pcHabilitada())) {
           alert(`El mes "${mes}" ya existe. Eliminalo primero o elegí otro.`);
           return;
         }
@@ -1419,6 +1434,18 @@
       // Ejemplo: 2% + 2% → septiembre = base×1.02  |  octubre = base×1.04
       let acumulado = 0;
       const resumen = [];
+
+      if (pcHabilitada()) {
+        const paraNube = {};
+        cuotas.forEach(c => {
+          acumulado += c.pct;
+          paraNube[c.mes] = { ...aplicarAumento(dBase, acumulado), basadoEn: mesBase, aumentoSobreBase: acumulado, aumentoMensual: c.pct };
+          resumen.push(`${c.mes}: +${c.pct}%  →  acumulado ${acumulado}% sobre ${mesBase}`);
+        });
+        guardarEnNube(paraNube, cuotas[cuotas.length - 1].mes,
+          `Cuotas guardadas en la nube (también llegan al celular):\n\n${resumen.join('\n')}`);
+        return;
+      }
 
       cuotas.forEach(c => {
         acumulado += c.pct;
@@ -1480,7 +1507,7 @@
         alert('Elegí el mes base sobre el que se aplica el aumento');
         return;
       }
-      if (dataOriginal[nombre] || dataCustom[nombre]) {
+      if (dataOriginal[nombre] || (dataCustom[nombre] && !pcHabilitada())) {
         alert('Ese mes ya existe. Elegí otro nombre o eliminá el anterior.');
         return;
       }
@@ -1488,6 +1515,12 @@
       const dBase = getDataMes(mesBase);
       if (!dBase) {
         alert('No se encontraron datos del mes base seleccionado');
+        return;
+      }
+
+      if (pcHabilitada()) {
+        guardarEnNube({ [nombre]: { ...aplicarAumento(dBase, pct), basadoEn: mesBase, aumentoSobreBase: pct } }, nombre,
+          `Mes "${nombre}" guardado en la nube con +${pct}% sobre "${mesBase}".\nTambién llega al celular.`);
         return;
       }
 
@@ -1530,6 +1563,20 @@
 
     function eliminarMesActual() {
       const mes = getMes();
+      if (dataOriginal[mes] && pcHabilitada()) {
+        const restantes = Object.keys(dataOriginal).filter(m => m !== mes);
+        if (!restantes.length) { alert('No se puede borrar el único mes.'); return; }
+        if (!confirm(`¿Borrar "${mes}" de la nube?\nTambién desaparece del celular.`)) return;
+        const actualizado = mesActualizado === mes ? restantes[restantes.length - 1] : mesActualizado;
+        window.nube.borrarMes(mes, actualizado)
+          .then(() => alert(`"${mes}" borrado de la nube.`))
+          .catch(e => alert('No se pudo borrar: ' + (e.code || e.message)));
+        return;
+      }
+      if (dataOriginal[mes]) {
+        alert('Ese mes viene de la nube. Se borra desde Recibo simple, o desde acá si habilitás esta PC (Apariencia y datos).');
+        return;
+      }
       if (!esMesCustom(mes)) {
         alert('Solo se pueden eliminar meses que vos registraste (no los originales).');
         return;
@@ -2170,7 +2217,71 @@
 
       estadoNube(desdeCache
         ? 'Conectando… · usando lo último sincronizado'
-        : 'Sincronizado con Recibo simple · último mes: ' + (remoto.actualizado || '—'));
+        : 'Sincronizado con Recibo simple · último mes: ' + (remoto.actualizado || '—') + (pcHabilitada() ? ' · PC habilitada' : ''));
+    }
+
+    // ========== CARGAR AUMENTOS EN LA NUBE (PC habilitada) ==========
+    function pcHabilitada() {
+      return !!(window.nube && window.nube.esAdmin);
+    }
+
+    function aplicarAumento(dBase, pct) {
+      const f = 1 + pct / 100;
+      const r = v => Math.round(Number(v || 0) * f);
+      const cats = {};
+      Object.keys(dBase.cats || {}).forEach(k => { cats[k] = r(dBase.cats[k]); });
+      return { cats, nuevoBono: r(dBase.nuevoBono), bonifDecreto: r(dBase.bonifDecreto), falloCaja: r(dBase.falloCaja) };
+    }
+
+    async function guardarEnNube(meses, mesAMostrar, mensaje) {
+      const ultimo = Object.keys(meses).reduce((a, m) => ordenMes(m) > ordenMes(a) ? m : a, mesActualizado);
+      try {
+        await window.nube.guardarMeses(meses, ultimo);
+        // Si ya había una proyección local con ese nombre, la de la nube la reemplaza
+        let cambio = false;
+        Object.keys(meses).forEach(m => { if (dataCustom[m]) { delete dataCustom[m]; cambio = true; } });
+        if (cambio) localStorage.setItem('reciboCustomMeses', JSON.stringify(dataCustom));
+        actualizarSelectMeses();
+        const sel = document.getElementById('mes');
+        if ([...sel.options].some(o => o.value === mesAMostrar)) { sel.value = mesAMostrar; mesElegidoAMano = true; }
+        cargarBases();
+        calcular();
+        alert(mensaje);
+      } catch (e) {
+        alert('No se pudo guardar en la nube: ' + (e.code || e.message));
+      }
+    }
+
+    // Lo llama el módulo de Firebase cuando sabe si esta PC está habilitada
+    function actualizarModoAdmin() {
+      const admin = pcHabilitada();
+      const dest = document.getElementById('destinoAumentos');
+      if (dest) dest.innerHTML = admin
+        ? 'Esta PC está habilitada: lo que registres se guarda <strong>en la nube</strong> y llega también al celular.'
+        : 'Lo que registres acá queda <strong>solo en esta PC</strong> (★). Para que llegue al celular, habilitá esta PC en "Apariencia y datos".';
+      const st = document.getElementById('adminEstado');
+      if (st && window.nube && window.nube.verificado) st.textContent = admin
+        ? '✓ Esta PC está habilitada para cargar aumentos en la nube.'
+        : 'Esta PC todavía no está habilitada. Agregá el código a las reglas de Firebase y recargá la página.';
+    }
+
+    async function mostrarCodigoPC() {
+      if (!window.nube) { alert('Firebase no está disponible en este momento.'); return; }
+      const el = document.getElementById('codigoPC');
+      el.style.display = 'inline-block';
+      el.textContent = 'obteniendo…';
+      try {
+        el.textContent = await window.nube.codigo();
+        document.getElementById('btnCopiarCodigoPC').style.display = '';
+      } catch (e) {
+        el.textContent = 'No se pudo obtener (' + (e.code || e.message) + ')';
+      }
+    }
+
+    async function copiarCodigoPC() {
+      const btn = document.getElementById('btnCopiarCodigoPC');
+      try { await navigator.clipboard.writeText(document.getElementById('codigoPC').textContent); btn.textContent = 'Copiado'; }
+      catch (e) { btn.textContent = 'Seleccioná el código y copialo'; }
     }
 
     // ========== EXPORT / IMPORT CACHE ==========
@@ -2516,8 +2627,8 @@
   </script>
 
   <script type="module">
-    // Lee los meses del mismo Firebase que Recibo simple (solo lectura).
-    // Los aumentos oficiales se cargan desde Recibo simple; acá aparecen solos.
+    // Lee los meses del mismo Firebase que Recibo simple.
+    // Si esta PC está habilitada en las reglas (igual que el celular), también puede guardarlos.
     const FIREBASE_CONFIG = {
       apiKey: "AIzaSyADOsIf2nLapSXrQl_NIZif5g8k5r3bShw",
       authDomain: "contador-a1d3e.firebaseapp.com",
@@ -2528,16 +2639,59 @@
     };
     const base = "https://www.gstatic.com/firebasejs/10.12.2/";
     try {
-      const [appM, fsM] = await Promise.all([
+      const [appM, fsM, authM] = await Promise.all([
         import(base + "firebase-app.js"),
-        import(base + "firebase-firestore.js")
+        import(base + "firebase-firestore.js"),
+        import(base + "firebase-auth.js")
       ]);
       const app = appM.initializeApp(FIREBASE_CONFIG);
       let db;
       try { db = fsM.initializeFirestore(app, { localCache: fsM.persistentLocalCache() }); }
       catch (e) { db = fsM.getFirestore(app); }
+      const auth = authM.getAuth(app);
+      const refDatos = fsM.doc(db, "recibo", "datos");
+      const LS_ADMIN = "reciboPCAdmin";
+
+      async function codigo() {
+        if (!auth.currentUser) await authM.signInAnonymously(auth);
+        return auth.currentUser.uid;
+      }
+      // Si las reglas permiten leer recibo/adminCheck, esta PC está habilitada
+      async function verificarAdmin() {
+        try {
+          await codigo();
+          await fsM.getDocFromServer(fsM.doc(db, "recibo", "adminCheck"));
+          window.nube.esAdmin = true;
+        } catch (e) {
+          window.nube.esAdmin = false;
+        }
+        window.nube.verificado = true;
+        window.actualizarModoAdmin();
+      }
+
+      window.nube = {
+        esAdmin: false,
+        verificado: false,
+        async codigo() {
+          try { localStorage.setItem(LS_ADMIN, "1"); } catch (e) {}
+          const c = await codigo();
+          verificarAdmin();
+          return c;
+        },
+        async guardarMeses(meses, actualizado) {
+          const args = [];
+          Object.keys(meses).forEach(m => args.push(new fsM.FieldPath("meses", m), meses[m]));
+          args.push("actualizado", actualizado);
+          await fsM.updateDoc(refDatos, ...args);
+        },
+        async borrarMes(mes, actualizado) {
+          await fsM.updateDoc(refDatos, new fsM.FieldPath("meses", mes), fsM.deleteField(), "actualizado", actualizado);
+        }
+      };
+      // Solo las PCs que ya pidieron su código se identifican
+      try { if (localStorage.getItem(LS_ADMIN) === "1") verificarAdmin(); } catch (e) {}
       // includeMetadataChanges: avisa también cuando la nube confirma que los datos guardados están al día
-      fsM.onSnapshot(fsM.doc(db, "recibo", "datos"), { includeMetadataChanges: true }, snap => {
+      fsM.onSnapshot(refDatos, { includeMetadataChanges: true }, snap => {
         if (snap.exists()) window.aplicarDatosNube(snap.data(), snap.metadata.fromCache);
         else window.estadoNube("Firebase conectado · todavía no hay meses en la nube");
       }, err => {
