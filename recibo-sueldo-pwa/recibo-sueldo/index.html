@@ -904,6 +904,9 @@
 
     // IPC mensual (usuario lo carga) — se guarda en localStorage
     let ipcData = JSON.parse(localStorage.getItem('reciboIPC') || '{}');
+
+    // Meses agregados a mano a la tabla de inflación (sin aumento registrado)
+    let mesesInflacionExtra = JSON.parse(localStorage.getItem('reciboMesesInflacion') || '[]');
     let chartInflacion = null;
 
     // Orden cronológico de meses conocidos
@@ -1645,17 +1648,60 @@
       renderInflacion();
     }
 
+    function agregarMesInflacion() {
+      const sel = document.getElementById('nuevoMesInflacion');
+      if (!sel || !sel.value) return;
+      const mes = sel.value;
+      if (!mesesInflacionExtra.includes(mes)) {
+        mesesInflacionExtra.push(mes);
+        localStorage.setItem('reciboMesesInflacion', JSON.stringify(mesesInflacionExtra));
+      }
+      renderInflacion();
+    }
+
+    function quitarMesInflacion(mes) {
+      const idx = mesesInflacionExtra.indexOf(mes);
+      if (idx >= 0) {
+        mesesInflacionExtra.splice(idx, 1);
+        localStorage.setItem('reciboMesesInflacion', JSON.stringify(mesesInflacionExtra));
+      }
+      if (ipcData[mes] != null) {
+        delete ipcData[mes];
+        localStorage.setItem('reciboIPC', JSON.stringify(ipcData));
+      }
+      renderInflacion();
+    }
+
     function renderInflacion() {
       const cont = document.getElementById('inflacionContenido');
       if (!cont) return;
 
       const idxInicio = ORDEN_MESES.indexOf(MES_INICIO_COMPARACION);
+      // Meses a mostrar: los que ya tienen datos de sueldo, más los que el
+      // usuario agregó a mano con "+ Agregar mes" (aunque no tengan aumento).
       const mesesActivos = ORDEN_MESES
-        .filter((m, i) => i >= idxInicio && (dataOriginal[m] || dataCustom[m]));
+        .filter((m, i) => i >= idxInicio && (dataOriginal[m] || dataCustom[m] || mesesInflacionExtra.includes(m)));
       if (mesesActivos.length === 0) {
         cont.innerHTML = '<p style="color:var(--muted);">No hay meses para comparar.</p>';
         return;
       }
+
+      // Selector para agregar un mes nuevo (que todavía no esté en la lista)
+      const opcionesNuevoMes = ORDEN_MESES
+        .filter((m, i) => i >= idxInicio && !mesesActivos.includes(m));
+      const selectorAgregarHTML = opcionesNuevoMes.length
+        ? `
+          <div style="display:flex; gap:8px; align-items:flex-end; margin-bottom:14px; flex-wrap:wrap;">
+            <div class="control-group" style="flex:0 0 200px;">
+              <label>Agregar mes a la tabla</label>
+              <select id="nuevoMesInflacion">
+                ${opcionesNuevoMes.map(m => `<option value="${m}">${m}</option>`).join('')}
+              </select>
+            </div>
+            <button type="button" class="btn btn-outline" onclick="agregarMesInflacion()">+ Agregar mes</button>
+          </div>
+        `
+        : '';
 
       const mesBase = mesesActivos[0];
       const nivelBase = getNivelSueldo(mesBase);
@@ -1671,6 +1717,7 @@
           <strong>Poder de compra</strong> = Índice sueldo ÷ Índice IPC × 100.
           Solo se calcula cuando cargaste el IPC del mes anterior; si no hay IPC, queda en — (no sigue al sueldo nominal).
         </p>
+        ${selectorAgregarHTML}
         <div style="overflow-x:auto;">
         <table style="width:100%; border-collapse:collapse; font-size:0.84rem;">
           <thead>
@@ -1685,6 +1732,7 @@
               <th style="padding:8px; text-align:right;">Índice sueldo</th>
               <th style="padding:8px; text-align:right;">Índice IPC*</th>
               <th style="padding:8px; text-align:right;">Poder de compra</th>
+              <th style="padding:8px;"></th>
             </tr>
           </thead>
           <tbody>
@@ -1697,12 +1745,15 @@
       mesesActivos.forEach((mes, i) => {
         const prev = i > 0 ? mesesActivos[i - 1] : null;
         const anunciado = getAumentoAnunciado(mes);
-        const mom = i === 0 ? 0 : getAumentoMoM(mes, prev);
+        const nivelActualTmp = getNivelSueldo(mes);
+        const nivelPrevTmp = prev != null ? getNivelSueldo(prev) : null;
+        const momValido = i > 0 && nivelActualTmp != null && nivelPrevTmp != null;
+        const mom = i === 0 ? 0 : (momValido ? getAumentoMoM(mes, prev) : null);
         const ipcMes = ipcData[mes];
         const ipcPrev = prev != null ? ipcData[prev] : null;
 
         const nivel = getNivelSueldo(mes);
-        const idxSueldo = (nivelBase && nivel != null) ? (nivel / nivelBase * 100) : 100;
+        const idxSueldo = (nivelBase && nivel != null) ? (nivel / nivelBase * 100) : (i === 0 ? 100 : null);
 
         let ipcDisponible = false;
         if (i === 0) {
@@ -1718,7 +1769,7 @@
 
         let varReal = null;
         let cubrio = null;
-        if (i > 0 && ipcPrev != null && !isNaN(Number(ipcPrev))) {
+        if (momValido && ipcPrev != null && !isNaN(Number(ipcPrev))) {
           varReal = ((1 + mom / 100) / (1 + Number(ipcPrev) / 100) - 1) * 100;
           cubrio = mom >= Number(ipcPrev) - 0.005;
         }
@@ -1730,12 +1781,12 @@
         let poder = null;
         if (i === 0) {
           poder = 100;
-        } else if (ipcDisponible) {
+        } else if (ipcDisponible && idxSueldo != null) {
           poder = idxSueldo / idxIPC * 100;
         }
 
         labels.push(mes.replace(' 26', '/26').replace(' 27', '/27'));
-        dataSueldo.push(+idxSueldo.toFixed(2));
+        dataSueldo.push(idxSueldo != null ? +idxSueldo.toFixed(2) : null);
         // En el gráfico, el IPC solo se dibuja cuando la cadena está completa este mes
         dataIPC.push(ipcDisponible ? +idxIPC.toFixed(2) : null);
         dataPoder.push(poder != null ? +poder.toFixed(2) : null);
@@ -1756,7 +1807,7 @@
           <tr style="background:${bg}; border-bottom:1px solid var(--border);">
             <td style="padding:7px 8px; font-weight:600;">${mes}${dataCustom[mes] ? ' ★' : ''}</td>
             <td style="padding:7px 8px; text-align:right; color:var(--muted);">${anunciado ? anunciado.toFixed(2) : '0,00'}</td>
-            <td style="padding:7px 8px; text-align:right; font-weight:600;">${i === 0 ? '—' : mom.toFixed(2)}</td>
+            <td style="padding:7px 8px; text-align:right; font-weight:600;">${(i === 0 || mom == null) ? '—' : mom.toFixed(2)}</td>
             <td style="padding:7px 8px; text-align:right;">
               <input class="cell-edit" type="number" step="0.01" min="0"
                 style="max-width:90px; margin-left:auto;"
@@ -1772,9 +1823,14 @@
               ${varReal != null ? (varReal >= 0 ? '+' : '') + varReal.toFixed(2) : '—'}
             </td>
             <td style="padding:7px 8px; text-align:center;">${badge}</td>
-            <td style="padding:7px 8px; text-align:right;">${idxSueldo.toFixed(2)}</td>
+            <td style="padding:7px 8px; text-align:right;">${idxSueldo != null ? idxSueldo.toFixed(2) : '—'}</td>
             <td style="padding:7px 8px; text-align:right;">${idxIPCTxt}</td>
             <td style="padding:7px 8px; text-align:right; font-weight:700; color:${poderColor};">${poderTxt}</td>
+            <td style="padding:7px 8px; text-align:center;">${
+              (!dataOriginal[mes] && !dataCustom[mes] && mesesInflacionExtra.includes(mes))
+                ? `<button type="button" class="btn btn-outline" style="padding:2px 8px; font-size:0.75rem;" title="Quitar mes" onclick="quitarMesInflacion('${mes}')">✕</button>`
+                : ''
+            }</td>
           </tr>
         `;
       });
